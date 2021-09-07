@@ -6,50 +6,26 @@
 //TODO: Anpassen der Kinematischen Parameter des Systems (Fingerglieder, Abstaende etc.)
 //TODO: Test Aktorik
 
-//Vorbereitung SD Karte /////////////////////////////////////////////
-File dataFile; //Fileobjekt für SD Karte erzeugen
-
-//Aufruf in Setup, Karteninitialisierung
-void initCard()
-{
-  bool ret;
-  Serial.print("Initialisiere SD Karte...");
-  ret = SD.begin(BUILTIN_SDCARD);
-  if (!ret)
-  {
-    Serial.println("Card failed, or not present");
-    while (1)
-    {
-    }
-  }
-  Serial.println("Karte initialisiert.");
-}
-
-//Aufruf in Setup, Vorbereitung des dataFile zum beschreiben
-bool openFile_write(const char *filename)
-{
-  dataFile = SD.open(filename, FILE_WRITE);
-  dataFile.flush();
-  return (dataFile == true);
-}
-///////////////////////////////////////////////////////////////////////
-
 //Laufzeit und Loggingfrequenz einstellen ////////////////////////////
 //Setzen von fester Loopedauer über Timer im Hintergrund, sodass der Controller parallel arbeiten kann
 unsigned int loopTime = 10; //Wert für gewünschtes Loopintervall in Millisekunden
 unsigned long breakTime;    //Zeitstempel zu Anfang des Loops -> Ablegen des Zeitpunkts für Loopende
 
+int start_per = 25;
+int max_runs = 1;
+
 //Counter für gewünschte Anzahl an Loopdurchläufen
 int totalRuns = 22000 / loopTime; //(10 Sekunden pro Bewegung)
 int t = 0;                        //Zählervariable für Loopdurchläufe
-int k = 0;                        //Zählervariable für Funktion Aktortrajektorie
-int num_runs = 0;
+int num_runs = 0;                 //Zählervariable Anzahl der Durchläufe
+int start_pos = (totalRuns * start_per) / 100;
+int k = start_pos; //Zählervariable für Funktion Aktortrajektorie
 ///////////////////////////////////////////////////////////////////////
 
 //Parametrierung der Aktorik///////////////////////////////////////////
 const float l_akt = 139.3f;        //102mm Aktorlänge von Loch zu Loch + Kraftsensorlänge von 37.3mm
 const float d_b = 161.062f;        //Abstand Glelenk B zu Mountgelenk Aktorrückseite
-const float akt_x = -152.12f;     //Abstand in X-Richtung Welt KS Gelenk B zu Mountgelenk Aktorrückseite in mm
+const float akt_x = -152.12f;      //Abstand in X-Richtung Welt KS Gelenk B zu Mountgelenk Aktorrückseite in mm
 const float akt_y = -21.79f;       //Abstand Y-Richtung Gelenk B zu Mountgelenk Aktorrückseite in mm
 const float alpha_const = 0.0612f; //Winkel zwischen d_B und X-Achse Weltsysten in rad (3.5°)
 const float theta = 0.6109f;       //Winkel zwischen l_1 und l_2 in rad (35°)
@@ -77,49 +53,6 @@ float getActuationSignal(float phi)
   float s_nom = l - l_akt;
   return s_nom;
 }
-
-//Berechnung des aktuell anliegenden Antriebsmoments aus Schwingenwinkel und gemessener Aktorkraft [Verifiziert durch Vergleich mit MATLAB]
-float getActuationTorque(float phi_B, float F_Aktor)
-{
-  float alpha_quer = pi - theta - phi_B; //Winkel zwischen X-Achse und l_s
-  //Serial.print("alpha_quer= ");
-  //Serial.println(alpha_quer);
-  float S_x = -l_s * cosf(alpha_quer);            //x-Position der Spitze des kurzen Schwingenarms
-  float S_y = l_s * sinf(alpha_quer);             //y-Position der Spitze des kurzen Schwingenarms
-  float phi_F = getAngle(akt_x, akt_y, S_x, S_y); // Funktion: Berechnet aktuellen Kraftvektorwinkel im Raum
-  //Serial.print("phi_F= ");
-  //Serial.println(phi_F);
-  float F_Akt_x = F_Aktor * cosf(phi_F); //Komponenten des Kraftvektors in Weltsystem
-  float F_Akt_y = F_Aktor * sinf(phi_F);
-  float M_akt = (F_Akt_x * S_y + F_Akt_y * (-S_x)); //[Nmm], Berechnen des Moments um Punkt B, pos. Richtung s. Skizze, pos. delta_x führt zu neg. Moment nach Skizze
-  return fabs(M_akt);
-}
-
-//Benötigte Funktion zur Berechnung des Kraftvektorwinkels [Verifiziert durch Vergleich mit MATLAB]
-float getAngle(float p1_x, float p1_y, float p2_x, float p2_y)
-{
-  float delta_x = p2_x - p1_x; //akt_x und akt_y konst. Größen definiert in aktorik.h
-  float delta_y = p2_y - p1_y;
-  float phi = 0;
-  if (delta_x > 0)
-  {
-    phi = atanf(delta_y / delta_x);
-  }
-  else if (delta_x < 0)
-  {
-    phi = atanf(delta_y / delta_x) - pi;
-  }
-  else if (delta_x == 0 && delta_y > 0)
-  {
-    phi = pi / 2;
-  }
-  else if (delta_x == 0 && delta_y < 0)
-  {
-    phi = -pi / 2;
-  }
-  return phi;
-}
-///////////////////////////////////////////////////////////////////////
 
 // Funktionen zur Aktorsteuerung //////////////////////////////////////
 
@@ -180,6 +113,13 @@ void positionActuator(int k)
   analogWrite(aktorpin, outputsignal);
 }
 
+void driveStart(int k)
+{
+  pinMode(aktorpin, OUTPUT);
+  analogWriteFrequency(aktorpin, 1000);
+  positionActuator(k);
+}
+
 ///////////////////////////////////////////////////////////////////////
 
 //Funktionen zur Verarbeitung des eingelesenen Positionssensors an Gelenk B/////////////
@@ -235,20 +175,109 @@ int valSens; //Analog eingelesenen Sensorwert, soll Kraftwert simulieren
 float M_upper = 0.05; //Oberer Grenzwert für Moment [Nm] -> Umkehrung von Vorwärts nach Rückwärts
 float M_lower = 0.01; //Unterer Grenzwert für Moment -> Umkehrung von Rückwärts nach Vorwärts
 
-float F_upper = 5; //Oberer Grenzwert für Moment [Nm] -> Umkehrung von Vorwärts nach Rückwärts
+float F_upper = 5;   //Oberer Grenzwert für Moment [Nm] -> Umkehrung von Vorwärts nach Rückwärts
 float F_lower = 0.4; //Unterer Grenzwert für Moment -> Umkehrung von Rückwärts nach Vorwärts
 
+// setzte die periode
+void setPeriod()
+{
+  if (k < totalRuns / 2)
+  {
+    //Serial.print("Periode = ");
+    per = 1;
+    //Serial.println(per);
+  }
+  if (k > totalRuns / 2)
+  {
+    //Serial.print("Periode = 2");
+    per = 2;
+    //Serial.println(per);
+  }
+}
+
+//Berechnung des aktuell anliegenden Antriebsmoments aus Schwingenwinkel und gemessener Aktorkraft [Verifiziert durch Vergleich mit MATLAB]
+float getActuationTorque(float phi_B, float F_Aktor)
+{
+  float alpha_quer = pi - theta - phi_B; //Winkel zwischen X-Achse und l_s
+  //Serial.print("alpha_quer= ");
+  //Serial.println(alpha_quer);
+  float S_x = -l_s * cosf(alpha_quer);            //x-Position der Spitze des kurzen Schwingenarms
+  float S_y = l_s * sinf(alpha_quer);             //y-Position der Spitze des kurzen Schwingenarms
+  float phi_F = getAngle(akt_x, akt_y, S_x, S_y); // Funktion: Berechnet aktuellen Kraftvektorwinkel im Raum
+  //Serial.print("phi_F= ");
+  //Serial.println(phi_F);
+  float F_Akt_x = F_Aktor * cosf(phi_F); //Komponenten des Kraftvektors in Weltsystem
+  float F_Akt_y = F_Aktor * sinf(phi_F);
+  float M_akt = (F_Akt_x * S_y + F_Akt_y * (-S_x)); //[Nmm], Berechnen des Moments um Punkt B, pos. Richtung s. Skizze, pos. delta_x führt zu neg. Moment nach Skizze
+  return fabs(M_akt);
+}
+
+//Benötigte Funktion zur Berechnung des Kraftvektorwinkels [Verifiziert durch Vergleich mit MATLAB]
+float getAngle(float p1_x, float p1_y, float p2_x, float p2_y)
+{
+  float delta_x = p2_x - p1_x; //akt_x und akt_y konst. Größen definiert in aktorik.h
+  float delta_y = p2_y - p1_y;
+  float phi = 0;
+  if (delta_x > 0)
+  {
+    phi = atanf(delta_y / delta_x);
+  }
+  else if (delta_x < 0)
+  {
+    phi = atanf(delta_y / delta_x) - pi;
+  }
+  else if (delta_x == 0 && delta_y > 0)
+  {
+    phi = pi / 2;
+  }
+  else if (delta_x == 0 && delta_y < 0)
+  {
+    phi = -pi / 2;
+  }
+  return phi;
+}
+///////////////////////////////////////////////////////////////////////
+
+//Vorbereitung SD Karte /////////////////////////////////////////////
+File dataFile; //Fileobjekt für SD Karte erzeugen
+
+//Aufruf in Setup, Karteninitialisierung
+void initCard()
+{
+  bool ret;
+  Serial.print("Initialisiere SD Karte...");
+  ret = SD.begin(BUILTIN_SDCARD);
+  if (!ret)
+  {
+    Serial.println("Card failed, or not present");
+    while (1)
+    {
+    }
+  }
+  Serial.println("Karte initialisiert.");
+}
+
+//Aufruf in Setup, Vorbereitung des dataFile zum beschreiben
+bool openFile_write(const char *filename)
+{
+  dataFile = SD.open(filename, FILE_WRITE);
+  dataFile.flush();
+  return (dataFile == true);
+}
+///////////////////////////////////////////////////////////////////////
 
 void setup()
 {
+  //Anfahren der Ausgangsposition des Aktors
+  driveStart(start_pos);
+  delay(5000);
 
-  analogWriteFrequency(aktorpin, 1000); // PWM Frequenz des Aktorpins auf 1 kHz festlegen
+  // map k to period
+  setPeriod();
 
   Serial.begin(9600); //Starten Serial Monitor
   //while(!Serial); //Warten, bis Serial Monitor geöffnet
-  delay(2000);
-
-  pinMode(aktorpin, OUTPUT);
+  delay(100);
 
   //Einstellungen für den ADC: Auflösung und Glättung der Messwerte
   analogReadResolution(12);
@@ -258,15 +287,12 @@ void setup()
   initCard();
   openFile_write("log_1.txt");
 
-  //Anfahren der Ausgangsposition des Aktors (Maximale Extension des Finger)
-  positionActuator(0);
-
   setupTime = millis();
 }
 
 void loop()
 {
-
+  Serial.print(k);
   //Positionieren des Aktors nach Loopdurchlaufsnummer
   positionActuator(k);
 
@@ -310,7 +336,7 @@ void loop()
   //Bestimmen des momentanen Schwingenwinkels
   //TODO: Lineare Kalibrierkurve fuer Poti B hinterlegen -> Vereinfachte Winkelberechung fuer Kraftregler
   float phi_B_d = 0.0533 * angleB - 9.27; //Umrechnung des ADC Werts über lineare Regression von für Positionssensorik an Gelenk B
-  float phi_B = phi_B_d * (pi / 180);         //Umrechnung des Winkels in Radiant
+  float phi_B = phi_B_d * (pi / 180);     //Umrechnung des Winkels in Radiant
   //Serial.print("Winkel B berechnet = ");
   //Serial.println(phi_B_d);
   /* float   phi_A_d = 0.0843*angleA - 206.2727; //Umrechnung des ADC Werts über lineare Regression von für Positionssensorik an Gelenk A
@@ -412,18 +438,7 @@ void loop()
   //Serial.print("k= ");
   //Serial.println(k);
 
-  if (k < totalRuns / 2)
-  {
-    //Serial.print("Periode = ");
-    per = 1;
-    //Serial.println(per);
-  }
-  if (k > totalRuns / 2)
-  {
-    //Serial.print("Periode = 2");
-    per = 2;
-    //Serial.println(per);
-  }
+  setPeriod();
 
   //Schreiben der erhobenen Daten auf die SD Karte als 32Byte String
   dataFile.printf("%5u;%4u;%4u;%4u;%4u;%4u\r\n", ms, angleB, angleA, angleK, forceB, forceA);
@@ -434,15 +449,16 @@ void loop()
     t = 0;
     num_runs += 1;
 
-    if (num_runs == 2) {
+    if (num_runs == max_runs)
+    {
       dataFile.close();
       Serial.println("Messungen abgeschlossen, Programm beendet");
       delay(5000);
-      positionActuator(0);
-      while (1);
+      positionActuator(start_pos);
+      while (1)
+        ;
     }
 
-    
   } //Durchgang
 
   //Prüfen, ob gesetzte Soll-Loopzeit verstrichen ist - wenn nicht, warten bis neuer Loop beginnen kann
