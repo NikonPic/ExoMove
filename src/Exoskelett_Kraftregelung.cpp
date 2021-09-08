@@ -1,5 +1,10 @@
+#include <Arduino.h>
 #include <SD.h>
 #include <math.h>
+
+//personal libraries
+//#include <HM10Controller.h>
+#include <SDCard.h>
 
 //Programm fuer Experimente
 //TODO: Anpassen der Kalibrierkurven fuer Kraftsensoren und Annaehrung Winkel in Gelenk B (Input Kraftregelung, wird nicht gespeichert)
@@ -39,6 +44,20 @@ const float val_count_phi_B_max = 5.0f;    //Startwert für Loopcounter, sodass 
 const float pi = 3.1416f;                  //Konstante für Wert von pi erzeugen
 const float multip = (2 * pi) / totalRuns; //Aufteilung von 2pi auf die gesamte Anzahl an Durchläufen
 ///////////////////////////////////////////////////////////////////////
+
+// Function definitions
+float getAngle(float p1_x, float p1_y, float p2_x, float p2_y);
+float getActuationSignal(float phi);
+float getNomPosition(int k);
+float mapf(float x, float in_min, float in_max, float out_min, float out_max);
+float mapActuatorInput(float nomPosition);
+void positionActuator(int k);
+void driveStart(int k);
+void posManual(int inputpin, int aktorpin);
+void setPeriod();
+float getActuationTorque(float phi_B, float F_Aktor);
+void initCard();
+void getReadyToStart();
 
 //Funktionen zur Berechnung der Aktorvariablen/////////////////////////
 //Berechnungen von Sollstellung s des Aktors aus Schwingenwinkelvorgabe [Verifiziert durch Vergleich mit MATLAB]
@@ -238,34 +257,6 @@ float getAngle(float p1_x, float p1_y, float p2_x, float p2_y)
 }
 ///////////////////////////////////////////////////////////////////////
 
-//Vorbereitung SD Karte /////////////////////////////////////////////
-File dataFile; //Fileobjekt für SD Karte erzeugen
-
-//Aufruf in Setup, Karteninitialisierung
-void initCard()
-{
-  bool ret;
-  Serial.print("Initialisiere SD Karte...");
-  ret = SD.begin(BUILTIN_SDCARD);
-  if (!ret)
-  {
-    Serial.println("Card failed, or not present");
-    while (1)
-    {
-    }
-  }
-  Serial.println("Karte initialisiert.");
-}
-
-//Aufruf in Setup, Vorbereitung des dataFile zum beschreiben
-bool openFile_write(const char *filename)
-{
-  dataFile = SD.open(filename, FILE_WRITE);
-  dataFile.flush();
-  return (dataFile == true);
-}
-///////////////////////////////////////////////////////////////////////
-
 void setup()
 {
   //Anfahren der Ausgangsposition des Aktors
@@ -460,13 +451,10 @@ void loop()
     break; //Ende Case Rückwärts
   }        //Ende Zweipunktregelung
 
-  //Serial.print("k= ");
-  //Serial.println(k);
-
   setPeriod();
 
   //Schreiben der erhobenen Daten auf die SD Karte als 32Byte String
-  dataFile.printf("%5u;%4u;%4u;%4u;%4u;%4u\r\n", ms, angleB, angleA, angleK, forceB, forceA);
+  print2dataFile(ms, angleB, angleA, angleK, forceB, forceA);
 
   //Prüfen der Abbruchbedingung: Beenden der Messungen nach Anzahl totalRuns Loopdurchläufen
   if (t++ > totalRuns)
@@ -476,7 +464,7 @@ void loop()
 
     if (num_runs == max_runs)
     {
-      dataFile.close();
+      closeDataFile();
       Serial.println("Messungen abgeschlossen, Programm beendet");
       delay(5000);
       positionActuator(start_pos);
