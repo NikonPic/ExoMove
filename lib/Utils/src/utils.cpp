@@ -167,3 +167,26 @@ float getAngle(float p1_x, float p1_y, float p2_x, float p2_y)
     }
     return phi;
 }
+
+void getReadyToStart()
+{
+    Serial.print("Serial available, please type y to start:");
+    int go = 0;
+    while (go == 0)
+    {
+        // read the incoming byte:
+        int incomingByte = Serial.read();
+
+        if (incomingByte != -1)
+        {
+            // say what you got:
+            Serial.print("I received: ");
+            Serial.println(incomingByte);
+            if (incomingByte == 121)
+            {
+                go = 1;
+            }
+        }
+        delay(50);
+    }
+}
