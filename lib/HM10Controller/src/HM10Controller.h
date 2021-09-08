@@ -29,4 +29,7 @@ public:
     size_t write(uint8_t *buffer, size_t size);
 };
 
+void getConnection();
+void testBinding();
+
 #endif

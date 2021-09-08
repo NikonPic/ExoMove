@@ -3,9 +3,10 @@
 #include <math.h>
 
 //personal libraries
-#include <HM10Controller.h>
+//#include <HM10Controller.h>
 #include <SDCard.h>
 #include <utils.h>
+#include <SoftwareSerial.h>
 
 //Programm fuer Experimente
 //TODO: Anpassen der Kalibrierkurven fuer Kraftsensoren und Annaehrung Winkel in Gelenk B (Input Kraftregelung, wird nicht gespeichert)
@@ -32,8 +33,29 @@ int dir = 1; //Flag für Richtung R=1 vorwärts, R=0 rückwärts
 int per = 1; //Flag für aktuelle Periode 1:(0,pi) oder Periode 2:(pi,2pi)
 int valSens; //Analog eingelesenen Sensorwert, soll Kraftwert simulieren
 
+void demoHM10()
+{
+  // Always Name: (TXD, RXD)
+  SoftwareSerial mySerial(1, 0);
+  mySerial.begin(9600);
+  Serial.begin(9600);
+
+  int context;
+  while (1)
+  {
+    if (mySerial.available())
+    {
+      context = mySerial.read();
+      Serial.println(context);
+    }
+    delay(50);
+  }
+}
+
 void setup()
 {
+  demoHM10();
+  //getConnection();
   //Anfahren der Ausgangsposition des Aktors
   driveStart(start_pos);
   delay(5000);
@@ -60,7 +82,6 @@ void setup()
 
 void loop()
 {
-
   //Positionieren des Aktors nach Loopdurchlaufsnummer
   positionActuator(k);
 
