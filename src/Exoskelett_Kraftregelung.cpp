@@ -3,7 +3,7 @@
 #include <math.h>
 
 //personal libraries
-//#include <HM10Controller.h>
+#include <HM10Controller.h>
 #include <SDCard.h>
 #include <utils.h>
 #include <SoftwareSerial.h>
@@ -33,63 +33,9 @@ int dir = 1; //Flag für Richtung R=1 vorwärts, R=0 rückwärts
 int per = 1; //Flag für aktuelle Periode 1:(0,pi) oder Periode 2:(pi,2pi)
 int valSens; //Analog eingelesenen Sensorwert, soll Kraftwert simulieren
 
-void demoHM10()
-{
-  // Always Name: (TXD, RXD)
-  SoftwareSerial BTserial(1, 0);
-  BTserial.begin(9600);
-  Serial.begin(9600);
-  delay(2000);
-  boolean NL = true;
-  Serial.println("Demo Connection");
-
-  BTserial.write("AT");
-  delay(250);
-
-  Serial.println(BTserial.available());
-
-  int c;
-  while (1)
-  {
-    // Read from the Bluetooth module and send to the Arduino Serial Monitor
-    if (BTserial.available())
-    {
-      c = BTserial.read();
-      Serial.write(c);
-    }
-
-    // Read from the Serial Monitor and send to the Bluetooth module
-    if (Serial.available())
-    {
-      c = Serial.read();
-
-      // do not send line end characters to the HM-10
-      if ((c != 10) & (c != 13))
-      {
-        BTserial.write(c);
-      }
-
-      // Echo the user input to the main window.
-      // If there is a new line print the ">" character.
-      if (NL)
-      {
-        Serial.print("\r\n>");
-        NL = false;
-      }
-      Serial.write(c);
-      if (c == 10)
-      {
-        NL = true;
-      }
-      delay(50);
-    }
-  }
-}
-
 void setup()
 {
-  //getConnection();
-  demoHM10();
+
   //Anfahren der Ausgangsposition des Aktors
   driveStart(start_pos);
   delay(5000);
@@ -110,12 +56,22 @@ void setup()
   openFile_write("log_1.txt");
 
   setupTime = millis();
-
-  getReadyToStart();
+  preStart();
 }
 
 void loop()
 {
+  // check HM10 first
+  HM10Controller::instance->update();
+
+  //Prüfen der Abbruchbedingung: Beenden der Messungen nach Anzahl totalRuns Loopdurchläufen
+  if (HM10Controller::instance->hasStopped())
+  {
+    closeDataFile();
+    Serial.println("Messungen abgeschlossen, Programm beendet");
+    checkHM10();
+  }
+
   //Positionieren des Aktors nach Loopdurchlaufsnummer
   positionActuator(k);
 
@@ -239,24 +195,6 @@ void loop()
 
   //Schreiben der erhobenen Daten auf die SD Karte als 32Byte String
   print2dataFile(ms, angleB, angleA, angleK, forceB, forceA);
-
-  //Prüfen der Abbruchbedingung: Beenden der Messungen nach Anzahl totalRuns Loopdurchläufen
-  if (t++ > totalRuns)
-  {
-    t = 0;
-    num_runs += 1;
-
-    if (num_runs == max_runs)
-    {
-      closeDataFile();
-      Serial.println("Messungen abgeschlossen, Programm beendet");
-      delay(5000);
-      positionActuator(start_pos);
-      while (1)
-        ;
-    }
-
-  } //Durchgang
 
   //Prüfen, ob gesetzte Soll-Loopzeit verstrichen ist - wenn nicht, warten bis neuer Loop beginnen kann
   while (millis() < breakTime)

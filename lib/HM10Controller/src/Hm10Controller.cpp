@@ -2,7 +2,7 @@
 
 HM10Controller *HM10Controller::instance = new HM10Controller();
 
-HM10Controller::HM10Controller() : iface(1, 0),
+HM10Controller::HM10Controller() : iface(0, 1),
                                    initialized(false),
                                    connected(false),
                                    watchConnected("OK+CONN"),
@@ -16,6 +16,7 @@ void HM10Controller::init()
 {
     iface.begin(115200);
     int first, second;
+    delay(5000);
 
     for (uint8_t trie = 0; trie < 5 && !initialized; ++trie)
     {
@@ -101,45 +102,78 @@ size_t HM10Controller::write(uint8_t *buffer, size_t size)
 }
 
 //
-void getConnection()
+void preStart()
 {
-    Serial.print("Initialising HM10 Module");
+    initHM10();
+    connectHM10();
+    startHM10();
+}
 
-    delay(50);
-    int go = 0;
+void initHM10()
+{
     int init = 0;
-
     //initialise
     while (init == 0)
     {
         HM10Controller::instance->init();
-        delay(500);
+        delay(250);
         if (HM10Controller::instance->testModule())
         {
             init = 1;
             Serial.println("Initialised");
         }
     }
+}
 
+void connectHM10()
+{
+    int conn = 0;
     //connect
-    while (go == 0)
+    while (conn == 0)
     {
         HM10Controller::instance->update();
         delay(10);
         if (HM10Controller::instance->isConnected())
         {
-            go = 1;
+            conn = 1;
             Serial.println("Connected");
         }
     }
 }
 
-void testBinding()
+void startHM10()
 {
     int go = 0;
-    while (go++ < 10)
+    while (go == 0)
     {
-        delay(1000);
-        Serial.println("Test");
+        HM10Controller::instance->update();
+        delay(10);
+        if (HM10Controller::instance->hasStarted())
+        {
+            go = 1;
+        }
     }
+}
+
+void checkHM10()
+{
+    if (HM10Controller::instance->hasStarted())
+    {
+        return;
+    }
+    if (HM10Controller::instance->isConnected())
+    {
+        startHM10();
+        return;
+    }
+    if (HM10Controller::instance->testModule())
+    {
+        connectHM10();
+        startHM10();
+        return;
+    }
+    initHM10();
+    connectHM10();
+    startHM10();
+    return;
 }

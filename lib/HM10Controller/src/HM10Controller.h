@@ -29,7 +29,11 @@ public:
     size_t write(uint8_t *buffer, size_t size);
 };
 
-void getConnection();
+void preStart();
 void testBinding();
+void initHM10();
+void connectHM10();
+void startHM10();
+void checkHM10();
 
 #endif
