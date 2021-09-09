@@ -36,26 +36,60 @@ int valSens; //Analog eingelesenen Sensorwert, soll Kraftwert simulieren
 void demoHM10()
 {
   // Always Name: (TXD, RXD)
-  SoftwareSerial mySerial(1, 0);
-  mySerial.begin(9600);
+  SoftwareSerial BTserial(1, 0);
+  BTserial.begin(9600);
   Serial.begin(9600);
+  delay(2000);
+  boolean NL = true;
+  Serial.println("Demo Connection");
 
-  int context;
+  BTserial.write("AT");
+  delay(250);
+
+  Serial.println(BTserial.available());
+
+  int c;
   while (1)
   {
-    if (mySerial.available())
+    // Read from the Bluetooth module and send to the Arduino Serial Monitor
+    if (BTserial.available())
     {
-      context = mySerial.read();
-      Serial.println(context);
+      c = BTserial.read();
+      Serial.write(c);
     }
-    delay(50);
+
+    // Read from the Serial Monitor and send to the Bluetooth module
+    if (Serial.available())
+    {
+      c = Serial.read();
+
+      // do not send line end characters to the HM-10
+      if ((c != 10) & (c != 13))
+      {
+        BTserial.write(c);
+      }
+
+      // Echo the user input to the main window.
+      // If there is a new line print the ">" character.
+      if (NL)
+      {
+        Serial.print("\r\n>");
+        NL = false;
+      }
+      Serial.write(c);
+      if (c == 10)
+      {
+        NL = true;
+      }
+      delay(50);
+    }
   }
 }
 
 void setup()
 {
-  demoHM10();
   //getConnection();
+  demoHM10();
   //Anfahren der Ausgangsposition des Aktors
   driveStart(start_pos);
   delay(5000);
