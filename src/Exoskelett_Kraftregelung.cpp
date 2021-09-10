@@ -32,13 +32,15 @@ unsigned long setupTime;
 int dir = 1; //Flag für Richtung R=1 vorwärts, R=0 rückwärts
 int per = 1; //Flag für aktuelle Periode 1:(0,pi) oder Periode 2:(pi,2pi)
 int valSens; //Analog eingelesenen Sensorwert, soll Kraftwert simulieren
+int hm10Count = 0;
+
+uint8_t messageApp[5];
 
 void setup()
 {
 
   //Anfahren der Ausgangsposition des Aktors
   driveStart(start_pos);
-  delay(5000);
 
   // map k to period
   per = setPeriod(k);
@@ -196,9 +198,16 @@ void loop()
   //Schreiben der erhobenen Daten auf die SD Karte als 32Byte String
   print2dataFile(ms, angleB, angleA, angleK, forceB, forceA);
 
+  if (hm10Count++ > 2)
+  {
+    sendMessageHM10(ms, angleB, angleA, angleK, forceB, forceA);
+    hm10Count = 0;
+  }
+
   //Prüfen, ob gesetzte Soll-Loopzeit verstrichen ist - wenn nicht, warten bis neuer Loop beginnen kann
   while (millis() < breakTime)
   {
+
     //waiting for loop time to finish - do nothing
   } //Loopdauer
 

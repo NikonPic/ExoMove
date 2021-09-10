@@ -177,3 +177,25 @@ void checkHM10()
     startHM10();
     return;
 }
+
+void write2ptr(int pos, unsigned int value, uint8_t *ptr)
+{
+    ptr[pos + 0] = value >> 8;     // high byte (0x12)
+    ptr[pos + 1] = value & 0x00FF; // low byte (0x34)
+}
+
+void sendMessageHM10(unsigned int ms, unsigned int angleB, unsigned int angleA, unsigned int angleK, unsigned int forceB, unsigned int forceA)
+{
+    // init array
+    uint8_t messageApp[12];
+    uint8_t *ptr = messageApp;
+
+    write2ptr(0, ms, ptr);
+    write2ptr(2, angleB, ptr);
+    write2ptr(4, angleA, ptr);
+    write2ptr(6, angleK, ptr);
+    write2ptr(8, forceB, ptr);
+    write2ptr(10, forceA, ptr);
+
+    HM10Controller::instance->write(ptr, 12);
+}

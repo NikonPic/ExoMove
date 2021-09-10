@@ -52,5 +52,4 @@ void posManual(int inputpin, int aktorpin);
 int setPeriod(int k);
 float getActuationTorque(float phi_B, float F_Aktor);
 void getReadyToStart();
-
 #endif

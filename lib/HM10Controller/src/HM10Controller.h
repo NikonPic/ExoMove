@@ -35,5 +35,6 @@ void initHM10();
 void connectHM10();
 void startHM10();
 void checkHM10();
+void sendMessageHM10(unsigned int ms, unsigned int angleB, unsigned int angleA, unsigned int angleK, unsigned int forceB, unsigned int forceA);
 
 #endif
