@@ -8,6 +8,7 @@ HM10Controller::HM10Controller() : iface(0, 1),
                                    watchConnected("OK+CONN"),
                                    watchLost("OK+LOST"),
                                    watchStart("Start"),
+                                   watchGame("Game"),
                                    watchStop("Stop")
 {
 }
@@ -25,8 +26,6 @@ void HM10Controller::init()
 
         delay(250);
 
-        Serial.println(iface.available());
-
         if (iface.available() >= 2)
         {
             first = iface.read();
@@ -35,8 +34,6 @@ void HM10Controller::init()
             {
                 initialized = true;
             }
-            Serial.print(first);
-            Serial.print(second);
         }
     }
 }
@@ -53,6 +50,7 @@ void HM10Controller::update(bool ignoreState)
             watchConnected.push(c);
             watchLost.push(c);
             watchStart.push(c);
+            watchGame.push(c);
             watchStop.push(c);
 
             if (watchConnected.matches())
@@ -74,6 +72,17 @@ bool HM10Controller::hasStarted()
     if (watchStart.matches())
     {
         watchStart.reset();
+        return true;
+    }
+    else
+        return false;
+}
+
+bool HM10Controller::hasStartedGame()
+{
+    if (watchGame.matches())
+    {
+        watchGame.reset();
         return true;
     }
     else
@@ -102,11 +111,11 @@ size_t HM10Controller::write(uint8_t *buffer, size_t size)
 }
 
 //
-void preStart()
+bool preStart()
 {
     initHM10();
     connectHM10();
-    startHM10();
+    return startHM10();
 }
 
 void initHM10()
@@ -120,7 +129,6 @@ void initHM10()
         if (HM10Controller::instance->testModule())
         {
             init = 1;
-            Serial.println("Initialised");
         }
     }
 }
@@ -136,13 +144,13 @@ void connectHM10()
         if (HM10Controller::instance->isConnected())
         {
             conn = 1;
-            Serial.println("Connected");
         }
     }
 }
 
-void startHM10()
+bool startHM10()
 {
+    bool gameMode = false;
     int go = 0;
     while (go == 0)
     {
@@ -152,10 +160,17 @@ void startHM10()
         {
             go = 1;
         }
+
+        if (HM10Controller::instance->hasStartedGame())
+        {
+            go = 1;
+            gameMode = true;
+        }
     }
+    return gameMode;
 }
 
-void checkHM10()
+bool checkHM10()
 {
     if (HM10Controller::instance->hasStarted())
     {
@@ -174,8 +189,7 @@ void checkHM10()
     }
     initHM10();
     connectHM10();
-    startHM10();
-    return;
+    return startHM10();
 }
 
 void write2ptr(int pos, unsigned int value, uint8_t *ptr)

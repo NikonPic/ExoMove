@@ -104,7 +104,6 @@ void posManual(int inputpin, int aktorpin)
 {
     int intputsignal = analogRead(inputpin);
     int outputsignal = map(intputsignal, 0, 1023, 0, 333);
-    Serial.println(outputsignal);
     analogWrite(aktorpin, outputsignal);
 }
 

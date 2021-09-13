@@ -17,6 +17,7 @@ unsigned long breakTime; //Zeitstempel zu Anfang des Loops -> Ablegen des Zeitpu
 
 int start_per = 25;
 int max_runs = 1;
+bool gameMode = false;
 
 //Counter für gewünschte Anzahl an Loopdurchläufen
 
@@ -24,6 +25,7 @@ int t = 0;        //Zählervariable für Loopdurchläufe
 int num_runs = 0; //Zählervariable Anzahl der Durchläufe
 int start_pos = (totalRuns * start_per) / 100;
 int k = start_pos; //Zählervariable für Funktion Aktortrajektorie
+int k_old = k;
 ///////////////////////////////////////////////////////////////////////
 
 unsigned long setupTime;
@@ -45,7 +47,7 @@ void setup()
   // map k to period
   per = setPeriod(k);
 
-  Serial.begin(9600); //Starten Serial Monitor
+  //Serial.begin(9600); //Starten Serial Monitor
   //while(!Serial); //Warten, bis Serial Monitor geöffnet
   delay(100);
 
@@ -58,7 +60,7 @@ void setup()
   openFile_write("log_1.txt");
 
   setupTime = millis();
-  preStart();
+  gameMode = preStart();
 }
 
 void loop()
@@ -70,12 +72,12 @@ void loop()
   if (HM10Controller::instance->hasStopped())
   {
     closeDataFile();
-    Serial.println("Messungen abgeschlossen, Programm beendet");
-    checkHM10();
+    gameMode = checkHM10();
   }
 
   //Positionieren des Aktors nach Loopdurchlaufsnummer
   positionActuator(k);
+  k_old = k;
 
   //Zeitstempel: Aktueller Loopdurchlauf (Startet bei 0)
   unsigned long ms = millis() - setupTime;
@@ -89,23 +91,9 @@ void loop()
   unsigned int angleB = analogRead(potiB);
   unsigned int angleK = analogRead(potiK);
 
-  //Mappen der Sensordaten auf Winkelwerte:
-  Serial.print("   Winkel B: ");
-  Serial.print(angleB);
-  Serial.print("   Winkel A: ");
-  Serial.print(angleA);
-  Serial.print("   Winkel K: ");
-  Serial.println(angleK);
-
   //Einlesen der Kraftsensorik (A201s)
   unsigned int forceB = analogRead(fSenB);
   unsigned int forceA = analogRead(fSenA);
-
-  //Mappen der Sensordaten auf Winkelwerte:
-  Serial.print("   Kraft Sensor B (vorne, Druck, Blau): ");
-  Serial.print(forceB);
-  Serial.print("   Kraft Sensor A (hinten, Zug, Gelb): ");
-  Serial.println(forceA);
 
   //Bestimmen des momentanen Schwingenwinkels
   float phi_B_d = 0.0533 * angleB - 9.27; //Umrechnung des ADC Werts über lineare Regression von für Positionssensorik an Gelenk B
@@ -120,14 +108,10 @@ void loop()
   float M_akt = getActuationTorque(phi_B, F_akt) / 1000; //Nm aus Nmm
 
   float F_reg = abs(F_akt);
-  Serial.print("F_reg = ");
-  Serial.println(F_reg);
 
   //Ueberschreiben mit fixem Wert fuer Demo an Hand (keine Positionssensorik verbaut)
 
   //float M_akt = 10; //Regler umgehen, immer Vorwärts
-  Serial.print("M_akt = ");
-  Serial.println(M_akt);
 
   //Zweipunktregler für Kraftregelung
   //Flagprüfung: Betriebsmodus feststellen
@@ -145,7 +129,6 @@ void loop()
     {
       //Grenzwert überschritten, umkehren der Bewegungsrichtung in Rückwärts
       dir = 0; //Umschalten der Flagvariable für Richtung
-      Serial.println("oberer Grenzwert überschritten, Wechsel in Rückwärtsbewegung");
     }
     break;
   case 0: //Richtung = Rückwärts, unterer Grenzwert relevant
@@ -188,7 +171,6 @@ void loop()
     {
       //Kraftwert ausreichen abgefallen, umkehren der Bewegungsrichtung in Vorwärts
       dir = 1; //Umschalten der Flagvariable für Richtung
-      Serial.println("unterer Grenzwert unterschritten, wechsel in Vorwärtsbewegung");
     }
     break; //Ende Case Rückwärts
   }        //Ende Zweipunktregelung
@@ -198,10 +180,15 @@ void loop()
   //Schreiben der erhobenen Daten auf die SD Karte als 32Byte String
   print2dataFile(ms, angleB, angleA, angleK, forceB, forceA);
 
-  if (hm10Count++ > 2)
+  if (1)
   {
     sendMessageHM10(ms, angleB, angleA, angleK, forceB, forceA);
     hm10Count = 0;
+  }
+
+  if (gameMode)
+  {
+    k = k_old;
   }
 
   //Prüfen, ob gesetzte Soll-Loopzeit verstrichen ist - wenn nicht, warten bis neuer Loop beginnen kann
