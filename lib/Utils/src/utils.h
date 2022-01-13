@@ -37,7 +37,7 @@ const int fSenA = A12; //Gelb
 const float M_upper = 0.05; //Oberer Grenzwert für Moment [Nm] -> Umkehrung von Vorwärts nach Rückwärts
 const float M_lower = 0.01; //Unterer Grenzwert für Moment -> Umkehrung von Rückwärts nach Vorwärts
 
-const float F_upper = 5;   //Oberer Grenzwert für Moment [Nm] -> Umkehrung von Vorwärts nach Rückwärts
+const float F_upper = 10;   //Oberer Grenzwert für Moment [Nm] -> Umkehrung von Vorwärts nach Rückwärts
 const float F_lower = 0.4; //Unterer Grenzwert für Moment -> Umkehrung von Rückwärts nach Vorwärts
 
 // Function definitions
